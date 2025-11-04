@@ -1,49 +1,50 @@
 import express from "express";
 import * as dotenv from "dotenv";
 import cors from "cors";
-import { Configuration, OpenAIApi } from "openai";
+import Groq from "groq-sdk";
 
 dotenv.config();
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
-
-const openai = new OpenAIApi(configuration);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/", async (req, res) => {
-  res.status(200).send({
-    message: "Hello from CodeX",
-  });
+// Prevent caching for all routes
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
+app.get("/", (req, res) => {
+  res.status(200).send({ message: "Hello from Groq CodeX!" });
 });
 
 app.post("/", async (req, res) => {
   try {
-    const prompt = req.body.prompt;
-    const response = await openai.createCompletion({
-      model: "text-davinci-003",
-      prompt: `${prompt}`,
-      temperature: 0,
-      max_tokens: 3000,
-      top_p: 1,
-      frequency_penalty: 0.5,
-      presence_penalty: 0,
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      return res.status(400).send({ error: "Missing 'prompt' in request body" });
+    }
+
+    // ✅ Use Groq’s current active model
+    const response = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile", // latest recommended replacement model
+      messages: [{ role: "user", content: prompt }],
     });
+
     res.status(200).send({
-      bot: response.data.choices[0].text,
+      bot: response.choices[0].message.content,
     });
   } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      error,
-    });
+    console.error("Error:", error);
+    res.status(500).send({ error: error.message });
   }
 });
 
-app.listen(5001, () =>
-  console.log("Server is running on port http://localhost:5001")
-);
+const PORT = 5001;
+app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
